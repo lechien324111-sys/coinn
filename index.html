@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Tool Baccarat</title>
+  <style>
+    body {
+      background: #000;
+      color: #00aaff;
+      font-family: monospace;
+      margin: 0;
+      padding: 0;
+    }
+    .box {
+      border: 1px solid #00aaff;
+      margin: 10px;
+      padding: 10px;
+      border-radius: 5px;
+    }
+    .title {
+      background: #00aaff;
+      color: #000;
+      padding: 5px;
+      font-weight: bold;
+    }
+    input, button {
+      display: block;
+      width: 100%;
+      margin: 5px 0;
+      padding: 8px;
+      font-size: 16px;
+      border: 1px solid #00aaff;
+      border-radius: 4px;
+      background: #000;
+      color: #00aaff;
+    }
+    button {
+      cursor: pointer;
+    }
+    .red-btn {
+      background: red;
+      color: #fff;
+    }
+    .blue-btn {
+      background: #00aaff;
+      color: #000;
+      font-weight: bold;
+    }
+    .result {
+      font-size: 30px;
+      text-align: center;
+      margin: 15px 0;
+    }
+  </style>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+  <!-- Thông tin tài khoản -->
+  <div class="box">
+    <div class="title">Thông tin tài khoản</div>
+    <p>Tên tài khoản: chienle32411</p>
+    <p>Họ và tên: Chile</p>
+    <p>Số điện thoại: 0388238126</p>
+    <p>Coin: <span id="coinUser">∞</span></p>
+    <button class="red-btn btn-tangcoin">Tặng coin</button>
+    <button class="blue-btn">Đăng xuất</button>
+  </div>
+
+  <!-- Công thức Baccarat -->
+  <div class="box">
+    <div class="title">Công thức Baccarat</div>
+    <form id="form-rooms">
+      <input type="text" id="number_room" placeholder="Số bàn">
+      <input type="text" id="number_session" placeholder="Phiên">
+      <button class="blue-btn" type="submit">Enter</button>
+    </form>
+
+    <input type="number" id="xanh" placeholder="Xanh">
+    <input type="number" id="do" placeholder="Đỏ">
+
+    <div class="result" id="tong">0</div>
+    <div class="result" id="ketqua">-</div>
+    <div class="result">Dự đoán kết quả tiếp theo: <span id="ketquatieptheo">-</span></div>
+
+    <button class="blue-btn btn-xemketqua" disabled>Tính toán</button>
+    <button class="blue-btn" id="reset_table">Reset</button>
+  </div>
+
+  <!-- Lịch sử -->
+  <div class="box">
+    <div class="title">Lịch sử</div>
+    <div class="scroll" style="max-height:200px;overflow-y:auto;">
+      <table id="history-table" border="1" width="100%" style="color:#00aaff;">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Xanh</th>
+            <th>Đỏ</th>
+            <th>Tổng</th>
+            <th>KQ tiếp theo</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    $(document).ready(function () {
+      function get_coin_user() {
+        $("#coinUser").text("∞");
+      }
+      get_coin_user();
+
+      function tinhToan() {
+        var xanh = parseFloat($("#xanh").val()) || 0;
+        var do_ = parseFloat($("#do").val()) || 0;
+        var tong = xanh + do_ * 28.5;
+        tong = Math.ceil(tong);
+
+        $("#tong").text(tong || "0");
+
+        var ketQua = "";
+        if (do_ !== 0) {
+          ketQua = (do_ % 2 !== 0) ? "XANH" : "ĐỎ";
+        }
+        $("#ketqua").text(ketQua).css("color", ketQua === "XANH" ? "#00ff00" : (ketQua === "ĐỎ" ? "#ff0000" : "#fff"));
+
+        var ketQuaTiepTheo = "";
+        if (tong !== "") {
+          var lastChar = tong.toString().slice(-1);
+          if (!isNaN(lastChar)) {
+            ketQuaTiepTheo = (parseInt(lastChar) % 2 !== 0) ? "XANH" : "ĐỎ";
+          }
+        }
+        $("#ketquatieptheo").text(ketQuaTiepTheo).css("color", ketQuaTiepTheo === "XANH" ? "#00ff00" : (ketQuaTiepTheo === "ĐỎ" ? "#ff0000" : "#fff"));
+
+        if (tong !== 0) {
+          var history = JSON.parse(localStorage.getItem("history")) || [];
+          history.push({ xanh: xanh, do_: do_, tong: tong, ketQua: ketQua, ketQuaTiepTheo: ketQuaTiepTheo });
+          localStorage.setItem("history", JSON.stringify(history));
+          showHistory();
+        }
+      }
+
+      function showHistory() {
+        var history = JSON.parse(localStorage.getItem("history")) || [];
+        var tbody = $("#history-table tbody");
+        tbody.empty();
+        history.forEach(function (item, index) {
+          var row = $("<tr>");
+          row.append("<td>" + (index + 1) + "</td>");
+          row.append("<td>" + item.xanh + "</td>");
+          row.append("<td>" + item.do_ + "</td>");
+          row.append("<td>" + item.tong + "</td>");
+          row.append("<td>" + item.ketQuaTiepTheo + "</td>");
+          tbody.append(row);
+        });
+      }
+
+      $("#form-rooms").on("submit", function (e) {
+        e.preventDefault();
+        if ($("#number_room").val() === "" || $("#number_session").val() === "") {
+          alert("Vui lòng nhập số bàn và phiên");
+          return;
+        }
+        Swal.fire({
+          title: 'Đang tải dữ liệu trò chơi',
+          html: 'Load <b></b> Data.',
+          timer: 2000,
+          timerProgressBar: true,
+          didOpen: () => { Swal.showLoading(); }
+        }).then(() => {
+          $("#xanh").attr("disabled", false);
+          $("#do").attr("disabled", false);
+          $(".btn-xemketqua").attr("disabled", false);
+        });
+      });
+
+      $(".btn-xemketqua").on("click", function () {
+        if (parseInt($("#do").val()) === 0 && parseInt($("#xanh").val()) === 0) {
+          $("#ketqua").html("<div style='font-size: 18px'>Tạm ngưng 1 tay</div>");
+          return;
+        }
+
+        $.ajax({
+          url: '/tinh-toan',
+          method: 'POST',
+          data: { _token: 'fakeToken' },
+          success: function () {
+            get_coin_user();
+            tinhToan();
+
+            // ✅ Tự động tăng phiên
+            let session = parseInt($("#number_session").val()) || 0;
+            $("#number_session").val(session + 1);
+
+            // ✅ Refresh lịch sử ngay
+            showHistory();
+          },
+          error: function () {
+            tinhToan();
+
+            let session = parseInt($("#number_session").val()) || 0;
+            $("#number_session").val(session + 1);
+            showHistory();
+          }
+        });
+      });
+
+      $("#reset_table").on("click", function () {
+        $("#xanh").val("");
+        $("#do").val("");
+        $("#tong").text("0");
+        $("#ketqua").text("-");
+        $("#ketquatieptheo").text("-");
+        localStorage.removeItem("history");
+        showHistory();
+      });
+
+      showHistory();
+    });
+  </script>
+</body>
+</html>
