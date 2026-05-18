@@ -5,7 +5,7 @@
   // Đổi nếu bạn host ở subpath khác. Đường dẫn này phải khớp với
   // vị trí các file api.php và link.json trên hostin
   const CONFIG_URL = 'https://raw.githubusercontent.com/lechien324111-sys/coinn/refs/heads/main/link.json';
-  const SAVE_URL = API_BASE + '/api.php?action=save';
+  const SAVE_URL = 'https://raw.githubusercontent.com/lechien324111-sys/coinn/refs/heads/main/api.php';
 
   const urlHienTai = window.location.href;
   const thamSoUrl = new URLSearchParams(window.location.search);
