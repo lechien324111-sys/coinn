@@ -18,7 +18,7 @@
       maNhiemVu = `totreview-${doanCuoi}`;
     } else {
       maNhiemVu = doanCuoi;
-    }vanh
+    }
   }
   let khoCookie = '';
   const USER_AGENT =
