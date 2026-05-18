@@ -1,7 +1,7 @@
 <?php
 
 
-const CONFIG_FILE = __DIR__ . '/link.json';
+const CONFIG_FILE = 'https://raw.githubusercontent.com/lechien324111-sys/coinn/refs/heads/main/link.json';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
