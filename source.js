@@ -3,9 +3,8 @@
 
   // ====== Cấu hình NekoVCheat ======
   // Đổi nếu bạn host ở subpath khác. Đường dẫn này phải khớp với
-  // vị trí các file api.php và link.json trên hosting.
-  const API_BASE = 'https://toolchiendr.rf.gd';
-  const CONFIG_URL = API_BASE + '/link.json';
+  // vị trí các file api.php và link.json trên hostin
+  const CONFIG_URL = 'https://raw.githubusercontent.com/lechien324111-sys/coinn/refs/heads/main/link.json';
   const SAVE_URL = API_BASE + '/api.php?action=save';
 
   const urlHienTai = window.location.href;
