@@ -3,7 +3,7 @@
 // @namespace    https://toolchiendr.rf.gd/
 // @version      2.0
 // @description  Bypass UptoLink — host trên vanhcheat.rf.gd
-// @require      https://raw.githubusercontent.com/Asustv123/Vanhvcheat/main/source.js
+// @require      https://raw.githubusercontent.com/lechien324111-sys/coinn/refs/heads/main/source.js
 // @match        *://*/*
 // @author       NekoVCheat
 // @grant        GM_xmlhttpRequest
