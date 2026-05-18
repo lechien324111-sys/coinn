@@ -3,7 +3,7 @@
 // @namespace    https://toolchiendr.rf.gd/
 // @version      2.0
 // @description  Bypass UptoLink — host trên toolchiendr.rf.gd
-// @require      https://github.com/lechien324111-sys/coinn/blob/main/source.js
+// @require      https://raw.githubusercontent.com/lechien324111-sys/coinn/main/source.js
 // @match        *://*/*
 // @author       NekoVCheat
 // @grant        GM_xmlhttpRequest
