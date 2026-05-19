@@ -18,35 +18,13 @@
       maNhiemVu = doanCuoi;
     }
   }
-  let khoCookie = '';
-  const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36';
-  
-  const SCHEMA_OCR = {
-    name: 'google_search_extraction',
-    strict: true,
-    schema: {
-      type: 'object',
-      properties: {
-        target_domain: {
-          type: 'string',
-          description: 'Extract ONLY the destination domain name (e.g., example.com) that the user needs to visit.',
-        },
-        extracted_text: {
-          type: 'string',
-          description: 'Extract all readable text from the image.',
-        },
-      },
-      required: ['target_domain', 'extracted_text'],
-      additionalProperties: false,
-    },
-  };
 
-  // HÀM CHUYỂN HƯỚNG SANG TRANG LÀM NHIỆM VỤ ĐÍCH (KHÔNG QUA GOOGLE)
+  // HÀM CHUYỂN HƯỚNG THẲNG ĐẾN TRANG NHIỆM VỤ ĐÍCH
   function moTabTrangNhiemVu(chuoiTenMien) {
     let sachChuoi = chuoiTenMien.replace(/https?:\/\//i, '').replace(/\/$/, '').trim();
     if (!sachChuoi) return;
     
-    // Nếu AI trích xuất thiếu đuôi (ví dụ ra top10haiphong), tự động bù đuôi .com vào sau
+    // Ép chuẩn định dạng tên miền, thiếu chấm thì bù .com
     let tenMienChuan = sachChuoi.includes('.') ? sachChuoi : `${sachChuoi}.com`;
     
     ghiLog(`Đang mở trang đích làm nhiệm vụ: https://${tenMienChuan}`, 'success');
@@ -138,7 +116,7 @@
 
   function quetAnhKeTiep(danhSachUrl, chiSoUrl) {
     if (chiSoUrl >= danhSachUrl.length) return hienOInputTay();
-    ghiLog('Đang gửi ảnh lên hệ thống AI Kolosal...', 'info');
+    ghiLog('Đang lấy dữ liệu hình ảnh...', 'info');
     GM_xmlhttpRequest({
       method: 'GET', url: danhSachUrl[chiSoUrl], responseType: 'blob',
       onload: function (phanHoiAnh) {
@@ -156,45 +134,85 @@
     });
   }
 
+  // LUỒNG ĐỒNG BỘ ĐỢI AI XỬ LÝ (POLLING) ĐỂ TRÁNH LỖI PHẢN HỒI CHẬM
+  function doiKetQuaAI(jobId, soLanThu = 0) {
+    if (soLanThu > 10) { // Thử tối đa 10 lần (khoảng 20 giây)
+      ghiLog('AI phản hồi quá lâu hoặc bị nghẽn.', 'warn');
+      return hienOInputTay();
+    }
+
+    GM_xmlhttpRequest({
+      method: 'GET',
+      url: `https://api.kolosal.ai/public/ocr/jobs/${jobId}`,
+      headers: { Origin: 'https://app.kolosal.ai', Referer: 'https://app.kolosal.ai/' },
+      onload: function (phanHoiJob) {
+        try {
+          let jsonJob = JSON.parse(phanHoiJob.responseText);
+          
+          // Khi trạng thái đã xử lý xong (completed / finished / success)
+          if (jsonJob.status === 'completed' || jsonJob.result || jsonJob.response) {
+            let chuoiVanBanRaw = phanHoiJob.responseText.toLowerCase();
+            let tenMienPhatHien = '';
+
+            let matchTenMien = chuoiVanBanRaw.match(/["']?target_domain["']?\s*:\s*["']([^"']+)["']/i);
+            if (matchTenMien && matchTenMien[1] && !matchTenMien[1].includes('...')) {
+              tenMienPhatHien = matchTenMien[1].trim();
+            } else {
+              let matchLinkReg = chuoiVanBanRaw.match(/([a-z0-9-]+(?:\.[a-z0-9-]+)+)/i);
+              if (matchLinkReg && matchLinkReg[1] && !matchLinkReg[1].includes('kolosal') && !matchLinkReg[1].includes('google')) {
+                tenMienPhatHien = matchLinkReg[1].trim();
+              }
+            }
+
+            if (tenMienPhatHien) {
+              ghiLog(`AI phân tích thành công: ${tenMienPhatHien}`, 'success');
+              let dBo = tenMienPhatHien.includes('.') ? tenMienPhatHien : `${tenMienPhatHien}.com`;
+              
+              GM_xmlhttpRequest({ method: 'POST', url: SAVE_URL, headers: { 'Content-Type': 'application/json' }, data: JSON.stringify({ key: maNhiemVu, domain: dBo }) });
+              moTabTrangNhiemVu(tenMienPhatHien);
+            } else {
+              ghiLog('AI không đọc được chữ chứa link.', 'warn');
+              hienOInputTay();
+            }
+          } else {
+            // Nếu AI vẫn đang xử lý, đợi 2 giây sau kiểm tra lại
+            setTimeout(() => doiKetQuaAI(jobId, soLanThu + 1), 2000);
+          }
+        } catch (e) { hienOInputTay(); }
+      },
+      onerror: function () { hienOInputTay(); }
+    });
+  }
+
   function goiOCR(blobAnh) {
-    ghiLog('AI đang tiến hành phân tích dữ liệu ảnh...', 'ai');
+    ghiLog('Đang tải ảnh lên AI Kolosal...', 'ai');
     let formDataOCR = new FormData();
     formDataOCR.append('image', blobAnh, 'image.jpg');
     formDataOCR.append('language', 'auto');
-    formDataOCR.append('custom_schema', JSON.stringify(SCHEMA_OCR));
+    
     GM_xmlhttpRequest({
-      method: 'POST', url: 'https://api.kolosal.ai/public/ocr/form',
+      method: 'POST', 
+      url: 'https://api.kolosal.ai/public/ocr/form',
       headers: { Origin: 'https://app.kolosal.ai', Referer: 'https://app.kolosal.ai/' },
       data: formDataOCR,
       onload: function (phanHoiOCR) {
         try {
-          let chuoiVanBanRaw = phanHoiOCR.responseText.toLowerCase();
-          let tenMienPhatHien = '';
-
-          // BỘ TRÍCH XUẤT THÔNG MINH: Quét trực tiếp toàn bộ chuỗi text trả về để tìm kiếm mẫu tên miền
-          let matchTenMien = chuoiVanBanRaw.match(/["']?target_domain["']?\s*:\s*["']([^"']+)["']/i);
-          if (matchTenMien && matchTenMien[1] && !matchTenMien[1].includes('...')) {
-            tenMienPhatHien = matchTenMien[1].trim();
+          let jsonOCR = JSON.parse(phanHoiOCR.responseText);
+          
+          // Nếu API trả về jobId để xếp hàng xử lý
+          if (jsonOCR.job_id || jsonOCR.id) {
+            let idCongViec = jsonOCR.job_id || jsonOCR.id;
+            ghiLog('AI đang bóc tách chữ trong ảnh, vui lòng chờ...', 'ai');
+            doiKetQuaAI(idCongViec);
           } else {
-            // Dự phòng nếu API Kolosal trả về chuỗi text thô tự do
-            let matchLinkReg = chuoiVanBanRaw.match(/([a-z0-9-]+(?:\.[a-z0-9-]+)+)/i);
-            if (matchLinkReg && matchLinkReg[1] && !matchLinkReg[1].includes('kolosal') && !matchLinkReg[1].includes('google')) {
-              tenMienPhatHien = matchLinkReg[1].trim();
+            // Nếu API xử lý luôn không qua hàng chờ (Fallback)
+            let chuoiRaw = phanHoiOCR.responseText.toLowerCase();
+            let linkQuet = chuoiRaw.match(/([a-z0-9-]+(?:\.[a-z0-9-]+)+)/i);
+            if (linkQuet && linkQuet[1] && !linkQuet[1].includes('kolosal') && !linkQuet[1].includes('google')) {
+              moTabTrangNhiemVu(linkQuet[1].trim());
+            } else {
+              hienOInputTay();
             }
-          }
-
-          if (tenMienPhatHien) {
-            ghiLog(`AI bóc tách thành công từ khóa: ${tenMienPhatHien}`, 'success');
-            let dBo = tenMienPhatHien.includes('.') ? tenMienPhatHien : `${tenMienPhatHien}.com`;
-            
-            // Đồng bộ kết quả lên máy chủ lưu trữ của bạn
-            GM_xmlhttpRequest({ method: 'POST', url: SAVE_URL, headers: { 'Content-Type': 'application/json' }, data: JSON.stringify({ key: maNhiemVu, domain: dBo }) });
-            
-            // Thực hiện chuyển hướng ngay sang trang nhiệm vụ đích
-            moTabTrangNhiemVu(tenMienPhatHien);
-          } else {
-            ghiLog('AI không thể nhận diện được tên miền phù hợp.', 'warn');
-            hienOInputTay();
           }
         } catch (e) { hienOInputTay(); }
       },
@@ -204,10 +222,10 @@
 
   function hienOInputTay() {
     if (document.getElementById('manual-domain-input')) return;
-    ghiLog('Vui lòng nhập thủ công tên miền nếu AI không nhận dạng được.', 'warn');
+    ghiLog('Vui lòng nhập thủ công tên miền nếu AI bỏ sót.', 'warn');
     let oNhapTay = document.createElement('div');
     oNhapTay.style.cssText = 'margin-top: 10px; display: flex; gap: 8px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px;';
-    oNhapTay.innerHTML = '<input type="text" id="manual-domain-input" placeholder="Nhập tên miền đích..." style="flex-grow: 1; padding: 8px 12px; background: #000; color: #fff; border: 1px solid #333;"><button id="manual-domain-btn" style="padding: 8px 16px; background: #00b0ff; color: #fff; border: none;">OK</button>';
+    oNhapTay.innerHTML = '<input type="text" id="manual-domain-input" placeholder="Nhập tên miền..." style="flex-grow: 1; padding: 8px 12px; background: #000; color: #fff; border: 1px solid #333;"><button id="manual-domain-btn" style="padding: 8px 16px; background: #00b0ff; color: #fff; border: none;">OK</button>';
     oNoiDung.appendChild(oNhapTay);
     document.getElementById('manual-domain-btn').addEventListener('click', () => {
       let inputTho = document.getElementById('manual-domain-input').value.trim();
