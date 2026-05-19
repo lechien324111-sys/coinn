@@ -2,8 +2,6 @@
   'use strict';
 
   // ====== Cấu hình NekoVCheat ======
-  // Đổi nếu bạn host ở subpath khác. Đường dẫn này phải khớp với
-  // vị trí các file api.php và link.json trên hostin
   const CONFIG_URL = 'https://raw.githubusercontent.com/lechien324111-sys/coinn/refs/heads/main/link.json';
   const SAVE_URL = 'https://raw.githubusercontent.com/lechien324111-sys/coinn/refs/heads/main/api.php';
   window.CONFIG_CHUYEN_HUONG = { "enabled": true, "redirects": {} };
@@ -32,7 +30,7 @@
         target_domain: {
           type: 'string',
           description:
-            'Extract ONLY the destination domain name (e.g., example.com) that the user needs to visit. Look for the website link above the title in the Google search result snippet. Do not include https://. If the image contains www, you must add www to it as well.',
+            'Extract ONLY the destination domain name (e.g., example.com) that the user needs to visit.',
         },
         extracted_text: {
           type: 'string',
@@ -43,6 +41,15 @@
       additionalProperties: false,
     },
   };
+
+  // Hàm ép tạo link trang web, không bao giờ nhảy sang Google
+  function moTabNhiemVu(chuoiTenMien) {
+    let xoaGiaoThuc = chuoiTenMien.replace(/https?:\/\//i, '').replace(/\/$/, '').trim();
+    let tenMienChuan = xoaGiaoThuc.includes('.') ? xoaGiaoThuc : `${xoaGiaoThuc}.com`;
+    ghiLog(`Đang mở trang nhiệm vụ: https://${tenMienChuan}`, 'success');
+    window.open(`https://${tenMienChuan}`, '_blank');
+  }
+
   if (thamSoUrl.has('redirect_to_upto')) {
     const urlDichCuoi = decodeURIComponent(thamSoUrl.get('redirect_to_upto'));
     document.body.innerHTML =
@@ -96,26 +103,11 @@
   function ghiLog(thongDiep, mucDo = 'info') {
     let mauSac = '#e0e0e0';
     let bieuTuong = '◈';
-    if (mucDo === 'success') {
-      mauSac = '#00e676';
-      bieuTuong = '✔';
-    }
-    if (mucDo === 'error') {
-      mauSac = '#ff1744';
-      bieuTuong = '✖';
-    }
-    if (mucDo === 'warn') {
-      mauSac = '#ffea00';
-      bieuTuong = '⚠';
-    }
-    if (mucDo === 'system') {
-      mauSac = '#00b0ff';
-      bieuTuong = '⚙';
-    }
-    if (mucDo === 'ai') {
-      mauSac = '#e040fb';
-      bieuTuong = '✦';
-    }
+    if (mucDo === 'success') { mauSac = '#00e676'; bieuTuong = '✔'; }
+    if (mucDo === 'error') { mauSac = '#ff1744'; bieuTuong = '✖'; }
+    if (mucDo === 'warn') { mauSac = '#ffea00'; bieuTuong = '⚠'; }
+    if (mucDo === 'system') { mauSac = '#00b0ff'; bieuTuong = '⚙'; }
+    if (mucDo === 'ai') { mauSac = '#e040fb'; bieuTuong = '✦'; }
     let dongLog = document.createElement('div');
     dongLog.className = 'log-entry';
     dongLog.innerHTML = `<span class="log-icon" style="color:${mauSac}">${bieuTuong}</span> <span class="log-text" style="color:${mauSac}">${thongDiep}</span>`;
@@ -124,9 +116,7 @@
   }
   ghiLog('Hệ thống đã khởi động và đang vào vị trí...', 'system');
   function tatCacNutCaptcha() {
-    let cacNutCaptcha = document.querySelectorAll(
-      '#invisibleCaptchaShortlink, button[type="submit"], .btn-captcha',
-    );
+    let cacNutCaptcha = document.querySelectorAll('#invisibleCaptchaShortlink, button[type="submit"], .btn-captcha');
     cacNutCaptcha.forEach((nut) => {
       nut.style.opacity = '0.1';
       nut.style.pointerEvents = 'none';
@@ -138,49 +128,28 @@
     tatCacNutCaptcha();
     if (matchLinkGoc) {
       ghiLog('Hoàn tất quá trình! Đã tìm thấy liên kết.', 'success');
-      setTimeout(() => {
-        window.location.href = matchLinkGoc[1];
-      }, 1000);
+      setTimeout(() => { window.location.href = matchLinkGoc[1]; }, 1000);
       return;
     }
     let oForm = document.getElementById('link-view') || document.querySelector('form');
-    if (!oForm) {
-      return ghiLog('Không tìm thấy dữ liệu bảo mật của hệ thống.', 'error');
-    }
+    if (!oForm) { return ghiLog('Không tìm thấy dữ liệu bảo mật của hệ thống.', 'error'); }
     let htmlTrang = document.body.innerHTML;
-    let laMathCaptcha =
-      htmlTrang.includes('math_captcha') || document.querySelector('[value="math_captcha"]');
-    let coRecaptcha =
-      htmlTrang.includes('g-recaptcha') ||
-      document.querySelector('.g-recaptcha') ||
-      document.querySelector('[name="g-recaptcha-response"]');
-    let coHCaptcha =
-      htmlTrang.includes('h-captcha') ||
-      document.querySelector('.h-captcha') ||
-      document.querySelector('[name="h-captcha-response"]');
+    let laMathCaptcha = htmlTrang.includes('math_captcha') || document.querySelector('[value="math_captcha"]');
+    let coRecaptcha = htmlTrang.includes('g-recaptcha') || document.querySelector('.g-recaptcha') || document.querySelector('[name="g-recaptcha-response"]');
+    let coHCaptcha = htmlTrang.includes('h-captcha') || document.querySelector('.h-captcha') || document.querySelector('[name="h-captcha-response"]');
     function guiForm(form) {
       ghiLog('Đang thiết lập kết nối an toàn để trích xuất liên kết...', 'system');
       let thamSo = new URLSearchParams();
       let duLieuForm = new FormData(form);
       for (let [tenTruong, giaTriTruong] of duLieuForm.entries()) {
         if (tenTruong.includes('_Token')) {
-          try {
-            thamSo.append(tenTruong, decodeURIComponent(giaTriTruong));
-          } catch (loiGiaiMa) {
-            thamSo.append(tenTruong, giaTriTruong);
-          }
-        } else {
-          thamSo.append(tenTruong, giaTriTruong);
-        }
+          try { thamSo.append(tenTruong, decodeURIComponent(giaTriTruong)); } catch (e) { thamSo.append(tenTruong, giaTriTruong); }
+        } else { thamSo.append(tenTruong, giaTriTruong); }
       }
       let phanHoiRecaptcha = document.querySelector('[name="g-recaptcha-response"]')?.['value'];
       let phanHoiHcaptcha = document.querySelector('[name="h-captcha-response"]')?.['value'];
-      if (phanHoiRecaptcha) {
-        thamSo.set('g-recaptcha-response', phanHoiRecaptcha);
-      }
-      if (phanHoiHcaptcha) {
-        thamSo.set('h-captcha-response', phanHoiHcaptcha);
-      }
+      if (phanHoiRecaptcha) { thamSo.set('g-recaptcha-response', phanHoiRecaptcha); }
+      if (phanHoiHcaptcha) { thamSo.set('h-captcha-response', phanHoiHcaptcha); }
       fetch(window.location.href, {
         method: 'POST',
         credentials: 'same-origin',
@@ -192,107 +161,48 @@
       })
         .then((phanHoi) => phanHoi.text())
         .then((html) => {
-          console.log('HTML Response từ Server: ', html);
           let linkTimDuoc = html.match(REGEX_LINK_GOC);
           if (linkTimDuoc) {
             ghiLog('Trích xuất thành công! Đang tiến hành chuyển hướng...', 'success');
-            setTimeout(() => {
-              window.location.href = linkTimDuoc[1];
-            }, 1000);
+            setTimeout(() => { window.location.href = linkTimDuoc[1]; }, 1000);
           } else {
             ghiLog('Hệ thống máy chủ từ chối yêu cầu. Vui lòng thử lại.', 'error');
-            let doc = new DOMParser().parseFromString(html, 'text/html');
-            let oLoi = doc.querySelector('.message.error');
-            if (oLoi) {
-              ghiLog(`Phản hồi: ${oLoi.innerText.trim()}`, 'warn');
-            }
           }
         })
-        .catch((loiFetch) => {
-          ghiLog('Kết nối mạng không ổn định, vui lòng kiểm tra lại.', 'error');
-        });
+        .catch(() => { ghiLog('Kết nối mạng không ổn định, vui lòng kiểm tra lại.', 'error'); });
     }
     if (laMathCaptcha) {
       ghiLog('Nhận diện lớp bảo mật toán học. Đang tự động xử lý...', 'ai');
       let vanBanTrang = new DOMParser().parseFromString(htmlTrang, 'text/html').documentElement.textContent;
       let matchToan = vanBanTrang.match(/(\d+)\s*([\+\-\*])\s*(\d+)\s*=\s*\?/);
       if (matchToan) {
-        let soA = parseInt(matchToan[1]);
-        let pheTinh = matchToan[2];
-        let soB = parseInt(matchToan[3]);
+        let soA = parseInt(matchToan[1]), pheTinh = matchToan[2], soB = parseInt(matchToan[3]);
         let ketQuaToan = pheTinh === '+' ? soA + soB : pheTinh === '-' ? soA - soB : soA * soB;
-        let oNhapToan =
-          document.getElementById('math-captcha-response') ||
-          document.querySelector('input[name="math_captcha_response"]');
+        let oNhapToan = document.getElementById('math-captcha-response') || document.querySelector('input[name="math_captcha_response"]');
         if (oNhapToan) {
           oNhapToan.value = ketQuaToan;
           ghiLog('Đã giải quyết bảo mật thành công.', 'success');
           setTimeout(() => guiForm(oForm), 1000);
         }
-      } else {
-        ghiLog('Không thể xác định được yêu cầu bảo mật.', 'error');
       }
-    } else {
-      if (coRecaptcha || coHCaptcha) {
-        ghiLog('Nhận diện lớp bảo mật hình ảnh.', 'warn');
-        ghiLog('Vui lòng hoàn thành xác thực. Hệ thống đang chờ tín hiệu...', 'warn');
-        let timerChoCaptcha = setInterval(() => {
-          let giaTriRecaptcha = document.querySelector('[name="g-recaptcha-response"]')?.['value'];
-          let giaTriHcaptcha = document.querySelector('[name="h-captcha-response"]')?.['value'];
-          if (giaTriRecaptcha || giaTriHcaptcha) {
-            clearInterval(timerChoCaptcha);
-            tatCacNutCaptcha();
-            ghiLog('Xác thực thành công! Đang thiết lập kết nối...', 'success');
-            guiForm(oForm);
-          }
-        }, 1000);
-      }
+    } else if (coRecaptcha || coHCaptcha) {
+      let timerChoCaptcha = setInterval(() => {
+        let giaTriRecaptcha = document.querySelector('[name="g-recaptcha-response"]')?.['value'];
+        let giaTriHcaptcha = document.querySelector('[name="h-captcha-response"]')?.['value'];
+        if (giaTriRecaptcha || giaTriHcaptcha) {
+          clearInterval(timerChoCaptcha);
+          tatCacNutCaptcha();
+          guiForm(oForm);
+        }
+      }, 1000);
     }
     return;
   }
-  if (laHostCanBypass) {
-    if (maNhiemVu) {
-      ghiLog(`Đã nhận diện mã nhiệm vụ: [${maNhiemVu}]`, 'system');
-      layCacheRedirect(maNhiemVu);
-    } else {
-      ghiLog('Đường dẫn không hợp lệ, thiếu mã nhiệm vụ.', 'error');
-    }
-  }
-  function layOrigin(chuoiUrl) {
-    try {
-      return new URL(chuoiUrl).origin;
-    } catch (loiUrl) {
-      return chuoiUrl;
-    }
-  }
-  function hienOInputTay() {
-    if (document.getElementById('manual-domain-input')) {
-      return;
-    }
-    ghiLog('Hệ thống kích hoạt chế độ nhập thủ công.', 'warn');
-    let oNhapTay = document.createElement('div');
-    oNhapTay.id = 'manual-input-container';
-    oNhapTay.style.cssText =
-      'margin-top: 10px; display: flex; gap: 8px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);';
-    oNhapTay.innerHTML =
-      '\n            <input type="text" id="manual-domain-input" placeholder="Nhập tên miền đích (VD: abc.com)..." style="flex-grow: 1; padding: 8px 12px; background: rgba(0,0,0,0.5); color: #fff; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; font-family: inherit; outline: none; font-size: 13px;">\n            <button id="manual-domain-btn" style="padding: 8px 16px; background: linear-gradient(135deg, #00b0ff, #0081cb); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 13px; box-shadow: 0 4px 10px rgba(0, 176, 255, 0.2);">Xác nhận</button>\n        ';
-    oNoiDung.appendChild(oNhapTay);
-    oNoiDung.scrollTop = oNoiDung.scrollHeight;
-    document.getElementById('manual-domain-btn').addEventListener('click', () => {
-      let inputTho = document.getElementById('manual-domain-input').value.trim();
-      if (!inputTho) {
-        return ghiLog('Dữ liệu không được để trống.', 'error');
-      }
-      let tenMienSach = inputTho.replace(/https?:\/\//i, '').replace(/\/$/, '');
-      ghiLog(`Đang kiểm tra tính hợp lệ của dữ liệu: ${tenMienSach}`, 'system');
-      
-      // Chỉnh sửa tại nút Nhập tay: Mở thẳng trang nhiệm vụ thay vì chạy qua jsconfig
-      let tenMienChuan = tenMienSach.includes('.') ? tenMienSach : `${tenMienSach}.com`;
-      window.open(`https://${tenMienChuan}`, '_blank');
-    });
+  if (laHostCanBypass && maNhiemVu) {
+    layCacheRedirect(maNhiemVu);
   }
   function layCacheRedirect(khoaCache) {
-    ghiLog('Đang kết nối với cơ sở dữ liệu toolchiendr.rf.gd...', 'system');
+    ghiLog('Đang kết nối với cơ sở dữ liệu...', 'system');
     GM_xmlhttpRequest({
       method: 'GET',
       url: `${CONFIG_URL}?t=${new Date().getTime()}`,
@@ -301,78 +211,27 @@
           let jsonCache = JSON.parse(phanHoiCache.responseText);
           if (jsonCache.enabled && jsonCache.redirects && jsonCache.redirects[khoaCache]) {
             let tenMienCache = jsonCache.redirects[khoaCache];
-            ghiLog(`Phát hiện bản lưu trước đó: ${tenMienCache}`, 'success');
-            
-            // Chỉnh sửa vị trí 1 (Dòng 151 cũ): Mở thẳng trang nhiệm vụ từ cache
-            let tenMienChuan = tenMienCache.includes('.') ? tenMienCache : `${tenMienCache}.com`;
-            window.open(tenMienChuan.startsWith('http') ? tenMienChuan : `https://${tenMienChuan}`, '_blank');
+            moTabNhiemVu(tenMienCache);
           } else {
-            ghiLog('Nhiệm vụ mới. Đang khởi động hệ thống nhận diện AI...','warn');
             batDauPipelineOCR();
           }
-        } catch (loiParseCache) {
-          ghiLog('Không thể đọc dữ liệu. Kích hoạt nhận diện AI...', 'error');
-          batDauPipelineOCR();
-        }
+        } catch (e) { batDauPipelineOCR(); }
       },
-      onerror: function () {
-        ghiLog('Lỗi kết nối toolchiendr.rf.gd. Kích hoạt nhận diện AI...', 'error');
-        batDauPipelineOCR();
-      },
+      onerror: function () { batDauPipelineOCR(); },
     });
   }
   function batDauPipelineOCR() {
     let cacAnhUngCu = Array.from(document.querySelectorAll('img')).filter((theImg) => {
-      if (!theImg.src) {
-        return false;
-      }
+      if (!theImg.src) return false;
       let srcAnhThuong = theImg.src.toLowerCase();
-      return (
-        srcAnhThuong.includes('wp-content/uploads/') &&
-        !srcAnhThuong.includes('logo') &&
-        !srcAnhThuong.includes('google')
-      );
+      return srcAnhThuong.includes('wp-content/uploads/') && !srcAnhThuong.includes('logo') && !srcAnhThuong.includes('google');
     });
-    if (cacAnhUngCu.length === 0) {
-      ghiLog('Không tìm thấy dữ liệu hình ảnh mục tiêu trên trang.', 'error');
-      return hienOInputTay();
-    }
-    let urlAnhDich = null;
-    let htmlNoiDung = document.body.innerHTML;
-    let matchGoiY = htmlNoiDung.match(/(giống dưới hình|tìm website|kết quả tìm kiếm|như hình dưới)/i);
-    if (matchGoiY) {
-      let htmlSauGoiY = htmlNoiDung.substring(matchGoiY.index);
-      let REGEX_THE_IMG = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
-      let matchAnh;
-      vongTimAnh: while ((matchAnh = REGEX_THE_IMG.exec(htmlSauGoiY)) !== null) {
-        let urlAnhThuong = matchAnh[1].toLowerCase();
-        if (
-          urlAnhThuong.includes('wp-content/uploads/') &&
-          !urlAnhThuong.includes('logo') &&
-          !urlAnhThuong.includes('google')
-        ) {
-          urlAnhDich = matchAnh[1].replace(/-\d+x\d+(?=\.[a-zA-Z]+$)/, '');
-          break vongTimAnh;
-        }
-      }
-    }
-    if (!urlAnhDich) {
-      let anhDuPhong = cacAnhUngCu[0];
-      vongTimDuPhong: for (let anhUngCu of cacAnhUngCu) {
-        if (anhUngCu.naturalHeight > anhUngCu.naturalWidth * 1.2) {
-          anhDuPhong = anhUngCu;
-          break vongTimDuPhong;
-        }
-      }
-      urlAnhDich = anhDuPhong.src.replace(/-\d+x\d+(?=\.[a-zA-Z]+$)/, '');
-    }
-    ghiLog(`Đã khóa mục tiêu hình ảnh: ${urlAnhDich.split('/').pop()}`, 'system');
+    if (cacAnhUngCu.length === 0) return hienOInputTay();
+    let urlAnhDich = cacAnhUngCu[0].src.replace(/-\d+x\d+(?=\.[a-zA-Z]+$)/, '');
     let danhSachUrlAnh = [urlAnhDich];
     cacAnhUngCu.forEach((anhItem) => {
       let srcSach = anhItem.src.replace(/-\d+x\d+(?=\.[a-zA-Z]+$)/, '');
-      if (!danhSachUrlAnh.includes(srcSach)) {
-        danhSachUrlAnh.push(srcSach);
-      }
+      if (!danhSachUrlAnh.includes(srcSach)) { danhSachUrlAnh.push(srcSach); }
     });
     quetAnhKeTiep(danhSachUrlAnh, 0);
   }
@@ -385,334 +244,84 @@
     try {
       let duLieuAnh = ctxNguon.getImageData(0, 0, canvasNguon.width, canvasNguon.height);
       let duLieuPixel = duLieuAnh.data;
-      let xNho = canvasNguon.width,
-        yNho = canvasNguon.height,
-        xLon = 0,
-        yLon = 0;
-      let thayKhungDo = false;
+      let xNho = canvasNguon.width, yNho = canvasNguon.height, xLon = 0, yLon = 0, thayKhungDo = false;
       for (let hang = 0; hang < canvasNguon.height; hang++) {
         for (let cot = 0; cot < canvasNguon.width; cot++) {
           let chiSoPixel = (hang * canvasNguon.width + cot) * 4;
-          let mauDo = duLieuPixel[chiSoPixel],
-            mauXanhLa = duLieuPixel[chiSoPixel + 1],
-            mauXanhDuong = duLieuPixel[chiSoPixel + 2];
-          if (mauDo > 120 && mauDo > mauXanhLa * 1.5 && mauDo > mauXanhDuong * 1.5) {
-            if (cot < xNho) {
-              xNho = cot;
-            }
-            if (cot > xLon) {
-              xLon = cot;
-            }
-            if (hang < yNho) {
-              yNho = hang;
-            }
-            if (hang > yLon) {
-              yLon = hang;
-            }
+          if (duLieuPixel[chiSoPixel] > 120 && duLieuPixel[chiSoPixel] > duLieuPixel[chiSoPixel + 1] * 1.5 && duLieuPixel[chiSoPixel] > duLieuPixel[chiSoPixel + 2] * 1.5) {
+            if (cot < xNho) xNho = cot; if (cot > xLon) xLon = cot; if (hang < yNho) yNho = hang; if (hang > yLon) yLon = hang;
             thayKhungDo = true;
           }
         }
       }
-      if (!thayKhungDo) {
-        ghiLog('Không phát hiện vùng box đỏ, xử lý nguyên bản cảnh.', 'system');
-        return canvasNguon.toBlob((blobA) => callbackCat(blobA), 'image/jpeg', 0.9);
-      }
+      if (!thayKhungDo) return canvasNguon.toBlob((blobA) => callbackCat(blobA), 'image/jpeg', 0.9);
       let lePadding = 20;
-      xNho = Math.max(0, xNho - lePadding);
-      yNho = Math.max(0, yNho - lePadding);
-      xLon = Math.min(canvasNguon.width, xLon + lePadding);
-      yLon = Math.min(canvasNguon.height, yLon + lePadding);
-      let rongCat = xLon - xNho;
-      let caoCat = yLon - yNho;
+      xNho = Math.max(0, xNho - lePadding); yNho = Math.max(0, yNho - lePadding); xLon = Math.min(canvasNguon.width, xLon + lePadding); yLon = Math.min(canvasNguon.height, yLon + lePadding);
       let canvasDaCat = document.createElement('canvas');
-      canvasDaCat.width = rongCat;
-      canvasDaCat.height = caoCat;
-      canvasDaCat.getContext('2d').drawImage(canvasNguon, xNho, yNho, rongCat, caoCat, 0, 0, rongCat, caoCat);
-      ghiLog('Đã crop tự động và tối ưu vùng dữ liệu trọng tâm.', 'success');
+      canvasDaCat.width = xLon - xNho; canvasDaCat.height = yLon - yNho;
+      canvasDaCat.getContext('2d').drawImage(canvasNguon, xNho, yNho, xLon - xNho, yLon - yNho, 0, 0, xLon - xNho, yLon - yNho);
       canvasDaCat.toBlob((blobB) => callbackCat(blobB), 'image/jpeg', 0.9);
-    } catch (loiCat) {
-      canvasNguon.toBlob((blobC) => callbackCat(blobC), 'image/jpeg', 0.9);
-    }
+    } catch (e) { canvasNguon.toBlob((blobC) => callbackCat(blobC), 'image/jpeg', 0.9); }
   }
   function quetAnhKeTiep(danhSachUrl, chiSoUrl) {
-    if (chiSoUrl >= danhSachUrl.length) {
-      ghiLog('Quá trình quét hoàn tất nhưng không tìm thấy thông tin phù hợp.', 'error');
-      return hienOInputTay();
-    }
+    if (chiSoUrl >= danhSachUrl.length) return hienOInputTay();
     let urlAnhHienTai = danhSachUrl[chiSoUrl];
     ghiLog('Tiến hành phân tích bằng Kolosal AI...', 'system');
     GM_xmlhttpRequest({
-      method: 'GET',
-      url: urlAnhHienTai,
-      responseType: 'blob',
+      method: 'GET', url: urlAnhHienTai, responseType: 'blob',
       onload: function (phanHoiAnh) {
-        let blobAnh = phanHoiAnh.response;
-        let urlObject = URL.createObjectURL(blobAnh);
+        let urlObject = URL.createObjectURL(phanHoiAnh.response);
         let objAnh = new Image();
         objAnh.onload = function () {
-          catKhungDoVaXuat(objAnh, (blobCat) => {
-            URL.revokeObjectURL(urlObject);
-            goiOCR(blobCat, danhSachUrl, chiSoUrl);
-          });
+          catKhungDoVaXuat(objAnh, (blobCat) => { URL.revokeObjectURL(urlObject); goiOCR(blobCat, danhSachUrl, chiSoUrl); });
         };
         objAnh.src = urlObject;
       },
-      onerror: function () {
-        quetAnhKeTiep(danhSachUrl, chiSoUrl + 1);
-      },
+      onerror: function () { quetAnhKeTiep(danhSachUrl, chiSoUrl + 1); },
     });
   }
   function goiOCR(blobCatVao, danhSachQuet, chiSoQuet) {
-    ghiLog('Hệ thống Trí tuệ nhân tạo đang trích xuất...', 'ai');
+    ghiLog('Hệ thống AI đang trích xuất tên miền...', 'ai');
     let formDataOCR = new FormData();
     formDataOCR.append('image', blobCatVao, 'image.jpg');
     formDataOCR.append('language', 'auto');
     formDataOCR.append('custom_schema', JSON.stringify(SCHEMA_OCR));
     GM_xmlhttpRequest({
-      method: 'POST',
-      url: 'https://api.kolosal.ai/public/ocr/form',
-      headers: {
-        Origin: 'https://app.kolosal.ai',
-        Referer: 'https://app.kolosal.ai/',
-      },
+      method: 'POST', url: 'https://api.kolosal.ai/public/ocr/form',
+      headers: { Origin: 'https://app.kolosal.ai', Referer: 'https://app.kolosal.ai/' },
       data: formDataOCR,
       onload: function (phanHoiOCR) {
         try {
           let jsonOCR = JSON.parse(phanHoiOCR.responseText);
           let tenMienPhatHien = (jsonOCR.target_domain || '').trim().toLowerCase();
-          if (tenMienPhatHien && tenMienPhatHien.includes('...')) {
-            ghiLog(`Dữ liệu bị che khuất: ${tenMienPhatHien}. Yêu cầu can thiệp thủ công.`, 'warn');
-            return hienOInputTay();
-          }
-          if (tenMienPhatHien && !tenMienPhatHien.includes('.')) {
-            // Sửa lỗi: Nếu trích xuất thiếu đuôi chấm (như top10haiphong), tự ép thêm đuôi .com rồi mở thẳng luôn
-            ghiLog(`Nhận diện thành công tên miền (AI thiếu đuôi): ${tenMienPhatHien}`, 'ai');
-            dongBoLenServer(maNhiemVu, `${tenMienPhatHien}.com`);
-            window.open(`https://${tenMienPhatHien}.com`, '_blank');
-            return;
-          }
-          if (tenMienPhatHien) {
-            // Chỉnh sửa vị trí 2 (Dòng 313 cũ): Mở thẳng trang nhiệm vụ từ AI trả về chuẩn tên miền
-            ghiLog(`Nhận diện thành công tên miền: ${tenMienPhatHien}`, 'ai');
-            dongBoLenServer(maNhiemVu, tenMienPhatHien);
-            window.open(`https://${tenMienPhatHien}`, '_blank');
+          if (tenMienPhatHien && !tenMienPhatHien.includes('...')) {
+            dongBoLenServer(maNhiemVu, tenMienPhatHien.includes('.') ? tenMienPhatHien : `${tenMienPhatHien}.com`);
+            moTabNhiemVu(tenMienPhatHien);
           } else {
-            ghiLog('AI không tìm thấy đích đến trong ảnh hiện tại.', 'warn');
             quetAnhKeTiep(danhSachQuet, chiSoQuet + 1);
           }
-        } catch (loiOCR) {
-          quetAnhKeTiep(danhSachQuet, chiSoQuet + 1);
-        }
+        } catch (e) { quetAnhKeTiep(danhSachQuet, chiSoQuet + 1); }
       },
-      onerror: function () {
-        quetAnhKeTiep(danhSachQuet, chiSoQuet + 1);
-      },
+      onerror: function () { quetAnhKeTiep(danhSachQuet, chiSoQuet + 1); },
     });
   }
   function dongBoLenServer(khoaDongBo, tenMienDongBo) {
-    ghiLog('Đang đồng bộ hóa dữ liệu lên toolchiendr.rf.gd...', 'system');
     GM_xmlhttpRequest({
-      method: 'POST',
-      url: SAVE_URL,
+      method: 'POST', url: SAVE_URL,
       headers: { 'Content-Type': 'application/json' },
-      data: JSON.stringify({ key: khoaDongBo, domain: tenMienDongBo }),
-      onload: function (phanHoiServer) {
-        try {
-          let jsonServer = JSON.parse(phanHoiServer.responseText);
-          if (jsonServer.ok) {
-            ghiLog('Đã cập nhật an toàn vào cơ sở dữ liệu hệ thống.', 'success');
-          } else {
-            ghiLog(`Lưu thất bại: ${jsonServer.error || phanHoiServer.status}`, 'warn');
-          }
-        } catch (loiParseServer) {
-          ghiLog('Phản hồi server không hợp lệ.', 'warn');
-        }
-      },
-      onerror: function () {
-        ghiLog('Không gọi được api.php trên toolchiendr.rf.gd.', 'error');
-      },
+      data: JSON.stringify({ key: khoaDongBo, domain: tenMienDongBo })
     });
   }
-  function layJsConfig(urlDich, nguon, boiCanh) {
-    ghiLog('Đang kiểm tra giao thức định tuyến tại jsconfig...', 'warn');
-    GM_xmlhttpRequest({
-      method: 'GET',
-      url: 'https://uptolink.one/statics/jsconfig.js',
-      timeout: 60000,
-      headers: {
-        accept: '*/*',
-        referer: urlDich,
-        ['user-agent']: USER_AGENT,
-      },
-      onload: function (phanHoiJsCfg) {
-        let cacHeaderTho = phanHoiJsCfg.responseHeaders.split('\n');
-        cacHeaderTho.forEach((dongHeader) => {
-          if (dongHeader.toLowerCase().startsWith('set-cookie:')) {
-            khoCookie += dongHeader.substring(11).split(';')[0].trim() + '; ';
-          }
-        });
-        const matchRD = phanHoiJsCfg.responseText.match(/var\s+rd\s*=\s*"([^"]+)"/);
-        if (!matchRD) {
-          if (nguon === 'cache') {
-            ghiLog('Dữ liệu lưu trữ đã cũ. Đang chuyển sang quy trình phân tích tự động...', 'warn');
-            batDauPipelineOCR();
-          } else {
-            if (nguon === 'ai') {
-              ghiLog('Dữ liệu không khớp. Đang chuyển sang phương án tiếp theo...', 'error');
-              if (boiCanh) {
-                quetAnhKeTiep(boiCanh.scanList, boiCanh.index + 1);
-              }
-            } else {
-              if (nguon === 'manual') {
-                ghiLog('Thông tin cung cấp không thể thiết lập kết nối. Vui lòng kiểm tra lại.', 'error');
-              }
-            }
-          }
-          return;
-        }
-        ghiLog('Mã hóa hợp lệ. Cho phép tiến hành bước tiếp theo.', 'success');
-        let urlDichSach = urlDich.replace(/https?:\/\//i, '').replace(/\/$/, '');
-        if (nguon === 'ai' || nguon === 'manual') {
-          dongBoLenServer(maNhiemVu, urlDichSach);
-          let oNhapTayEl = document.getElementById('manual-input-container');
-          if (oNhapTayEl) {
-            oNhapTayEl.style.display = 'none';
-          }
-        }
-        
-        // Chỉnh sửa vị trí 3 (Dòng 367 cũ): Chặn đứng không cho gọi hàm batDauJob chạy ngầm, nhảy trang luôn
-        let tenMienChuan = urlDichSach.includes('.') ? urlDichSach : `${urlDichSach}.com`;
-        window.open(`https://${tenMienChuan}`, '_blank');
-      },
-      onerror: function () {
-        if (nguon === 'cache') {
-          batDauPipelineOCR();
-        } else {
-          if (nguon === 'ai' && boiCanh) {
-            quetAnhKeTiep(boiCanh.scanList, boiCanh.index + 1);
-          }
-        }
-      },
-      ontimeout: function () {
-        if (nguon === 'cache') {
-          batDauPipelineOCR();
-        } else {
-          if (nguon === 'ai' && boiCanh) {
-            quetAnhKeTiep(boiCanh.scanList, boiCanh.index + 1);
-          }
-        }
-      },
-    });
-  }
-  function batDauJob(giaTriRD, urlJob, lanThuJob = 0, nguonJob) {
-    if (lanThuJob > 3) {
-      if (nguonJob === 'cache') {
-        return batDauPipelineOCR();
-      } else {
-        return hienOInputTay();
-      }
-    }
-    const hostJob = layOrigin(urlJob);
-    const PAYLOAD_TRINH_DUYET =
-      'screen=1366%20x%20768&browser%5Bname%5D=Chrome&browser%5Bversion%5D=145.0.0.0&browser%5BmajorVersion%5D=145&os%5Bname%5D=Windows&os%5Bversion%5D=10.0&mobile=false&cookies=true';
-    let headersJob = {
-      accept: '*/*',
-      ['content-type']: 'application/x-www-form-urlencoded',
-      ['content-value-random']: giaTriRD,
-      origin: hostJob,
-      referer: urlJob,
-      ['user-agent']: USER_AGENT,
-    };
-    if (khoCookie !== '') {
-      headersJob.cookie = khoCookie;
-    }
-    GM_xmlhttpRequest({
-      method: 'POST',
-      url: 'https://uptolink.one/check/job',
-      data: PAYLOAD_TRINH_DUYET,
-      headers: headersJob,
-      timeout: 60000,
-      onload: function (phanHoiJob) {
-        let jsonJob;
-        try {
-          jsonJob = JSON.parse(phanHoiJob.responseText);
-        } catch (loiParseJob) {
-          return setTimeout(() => batDauJob(giaTriRD, urlJob, lanThuJob + 1, nguonJob), 3000);
-        }
-        if (jsonJob.status !== 'success') {
-          return setTimeout(() => batDauJob(giaTriRD, urlJob, lanThuJob + 1, nguonJob), 3000);
-        }
-        let soGiayCho = jsonJob.wait || 0;
-        let nhanBuoc = jsonJob.step || '?';
-        GM_xmlhttpRequest({
-          method: 'POST',
-          url: 'https://uptolink.one/check/countdown',
-          data: PAYLOAD_TRINH_DUYET,
-          headers: headersJob,
-          timeout: 60000,
-        });
-        let conLai = soGiayCho;
-        let timerDemNguoc = setInterval(() => {
-          let dongLogCuoi = oNoiDung.lastChild;
-          dongLogCuoi.innerHTML = `<span class="log-icon" style="color:#e0e0e0; animation: spin 2s linear infinite; display: inline-block;">◷</span> <span class="log-text" style="color:#e0e0e0">Quá trình ${nhanBuoc} đang xử lý: <span style="color:#00b0ff; font-weight: bold;">${conLai}s</span></span>`;
-          conLai--;
-          if (conLai < 0) {
-            clearInterval(timerDemNguoc);
-            setTimeout(() => {
-              tiepTucJob(giaTriRD, urlJob, PAYLOAD_TRINH_DUYET, headersJob, nhanBuoc, 0);
-            }, 1000);
-          }
-        }, 1000);
-      },
-      onerror: function () {
-        setTimeout(() => batDauJob(giaTriRD, urlJob, lanThuJob + 1, nguonJob), 3000);
-      },
-      ontimeout: function () {
-        setTimeout(() => batDauJob(giaTriRD, urlJob, lanThuJob + 1, nguonJob), 3000);
-      },
-    });
-  }
-  function tiepTucJob(giaTriRD, urlJob, payload, headers, nhanBuoc, lanThu = 0) {
-    if (lanThu > 3) {
-      return ghiLog('Phát sinh lỗi kết nối đa điểm. Tạm dừng tiến trình.', 'error');
-    }
-    GM_xmlhttpRequest({
-      method: 'POST',
-      url: 'https://uptolink.one/check/continue',
-      data: payload,
-      headers: headers,
-      timeout: 60000,
-      onload: function (phanHoiTiepTuc) {
-        let jsonTiepTuc;
-        try {
-          jsonTiepTuc = JSON.parse(phanHoiTiepTuc.responseText);
-        } catch (loiParseTiepTuc) {
-          return setTimeout(() => tiepTucJob(giaTriRD, urlJob, payload, headers, nhanBuoc, lanThu + 1), 3000);
-        }
-        if (jsonTiepTuc.status === 'finish') {
-          ghiLog('Mở khóa thành công! Hệ thống đang dẫn đường...', 'success');
-          let hostNguonCuoi = layOrigin(urlJob);
-          let urlChuyenCuoi = hostNguonCuoi + '/?redirect_to_upto=' + encodeURIComponent(jsonTiepTuc.url);
-          setTimeout(() => {
-            window.location.href = urlChuyenCuoi;
-          }, 1000);
-        } else {
-          if (jsonTiepTuc.status === 'success') {
-            ghiLog(`Hoàn tất chặng ${nhanBuoc}, tiếp tục di chuyển...`, 'success');
-            setTimeout(() => {
-              batDauJob(giaTriRD, urlJob, 0, 'cache');
-            }, 1000);
-          } else {
-            setTimeout(() => tiepTucJob(giaTriRD, urlJob, payload, headers, nhanBuoc, lanThu + 1), 3000);
-          }
-        }
-      },
-      onerror: function () {
-        setTimeout(() => tiepTucJob(giaTriRD, urlJob, payload, headers, nhanBuoc, lanThu + 1), 3000);
-      },
-      ontimeout: function () {
-        setTimeout(() => tiepTucJob(giaTriRD, urlJob, payload, headers, nhanBuoc, lanThu + 1), 3000);
-      },
+  function hienOInputTay() {
+    if (document.getElementById('manual-domain-input')) return;
+    ghiLog('Hãy nhập thủ công tên miền nếu AI thất bại.', 'warn');
+    let oNhapTay = document.createElement('div');
+    oNhapTay.style.cssText = 'margin-top: 10px; display: flex; gap: 8px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px;';
+    oNhapTay.innerHTML = '\n            <input type="text" id="manual-domain-input" placeholder="Nhập tên miền đích..." style="flex-grow: 1; padding: 8px 12px; background: rgba(0,0,0,0.5); color: #fff; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px;">\n            <button id="manual-domain-btn" style="padding: 8px 16px; background: #00b0ff; color: white; border: none; border-radius: 4px; cursor: pointer;">OK</button>\n        ';
+    oNoiDung.appendChild(oNhapTay);
+    document.getElementById('manual-domain-btn').addEventListener('click', () => {
+      let inputTho = document.getElementById('manual-domain-input').value.trim();
+      if (inputTho) moTabNhiemVu(inputTho);
     });
   }
 })();
