@@ -41,7 +41,7 @@
     },
   };
 
-  // HÀM CHUYỂN HƯỚNG SANG TRANG LÀM NHIỆM VỤ (ĐÃ XÓA SẠCH GOOGLE)
+  // HÀM CHUYỂN HƯỚNG SANG TRANG LÀM NHIỆM VỤ ĐÍCH
   function moTabTrangNhiemVu(chuoiTenMien) {
     let sachChuoi = chuoiTenMien.replace(/https?:\/\//i, '').replace(/\/$/, '').trim();
     // Nếu AI quét thiếu đuôi dấu chấm, ép tự động thêm .com vào sau tên thương hiệu
@@ -167,7 +167,11 @@
       onload: function (phanHoiOCR) {
         try {
           let jsonOCR = JSON.parse(phanHoiOCR.responseText);
-          let tenMienPhatHien = (jsonOCR.target_domain || '').trim().toLowerCase();
+          
+          // SỬA LỖI ĐỌC ĐÚNG ĐỊNH DẠNG LỒNG NHAU CỦA AI KOLOSAL KHÔNG BỊ UNDEFINED
+          let ketQuaOcr = jsonOCR.response?.google_search_extraction || jsonOCR;
+          let tenMienPhatHien = (ketQuaOcr.target_domain || jsonOCR.target_domain || '').trim().toLowerCase();
+          
           if (tenMienPhatHien && !tenMienPhatHien.includes('...')) {
             ghiLog(`AI bóc tách thành công từ khóa: ${tenMienPhatHien}`, 'success');
             
