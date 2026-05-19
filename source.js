@@ -19,15 +19,15 @@
     }
   }
 
-  // HÀM CHUYỂN HƯỚNG THẲNG ĐẾN TRANG NHIỆM VỤ ĐÍCH
+  // HÀM CHUYỂN HƯỚNG SANG TRANG LÀM NHIỆM VỤ ĐÍCH (KHÔNG GOOGLE)
   function moTabTrangNhiemVu(chuoiTenMien) {
     let sachChuoi = chuoiTenMien.replace(/https?:\/\//i, '').replace(/\/$/, '').trim();
     if (!sachChuoi) return;
     
-    // Ép chuẩn định dạng tên miền, thiếu chấm thì bù .com
+    // Tự động thêm đuôi .com nếu AI bóc tách thiếu dấu chấm
     let tenMienChuan = sachChuoi.includes('.') ? sachChuoi : `${sachChuoi}.com`;
     
-    ghiLog(`Đang mở trang đích làm nhiệm vụ: https://${tenMienChuan}`, 'success');
+    ghiLog(`Đang chuyển hướng sang trang đích: https://${tenMienChuan}`, 'success');
     window.open(`https://${tenMienChuan}`, '_blank');
   }
 
@@ -54,7 +54,7 @@
   oPanel.appendChild(oTieuDe); oPanel.appendChild(oNoiDung); document.body.appendChild(oPanel);
 
   function ghiLog(thongDiep, mucDo = 'info') {
-    let mauSac = '#00b0ff'; if (mucDo === 'success') mauSac = '#00e676'; if (mucDo === 'warn') mauSac = '#ffea00'; if (mucDo === 'ai') mauSac = '#e040fb';
+    let mauSac = '#00b0ff'; if (mucDo === 'success') mauSac = '#00e676'; if (mucDo === 'warn') mauSac = '#ffea00'; if (mucDo === 'ai') mauSac = '#e040fb'; if (mucDo === 'error') mauSac = '#ff1744';
     let dongLog = document.createElement('div'); dongLog.className = 'log-entry';
     dongLog.innerHTML = `<span style="color:${mauSac}">◈ ${thongDiep}</span>`;
     oNoiDung.appendChild(dongLog); oNoiDung.scrollTop = oNoiDung.scrollHeight;
@@ -116,7 +116,7 @@
 
   function quetAnhKeTiep(danhSachUrl, chiSoUrl) {
     if (chiSoUrl >= danhSachUrl.length) return hienOInputTay();
-    ghiLog('Đang lấy dữ liệu hình ảnh...', 'info');
+    ghiLog('Đang tải dữ liệu hình ảnh từ bộ nhớ...', 'info');
     GM_xmlhttpRequest({
       method: 'GET', url: danhSachUrl[chiSoUrl], responseType: 'blob',
       onload: function (phanHoiAnh) {
@@ -134,22 +134,21 @@
     });
   }
 
-  // LUỒNG ĐỒNG BỘ ĐỢI AI XỬ LÝ (POLLING) ĐỂ TRÁNH LỖI PHẢN HỒI CHẬM
+  // LUỒNG ĐỒNG BỘ ĐỢI AI TRẢ KẾT QUẢ CHỮ (POLLING)
   function doiKetQuaAI(jobId, soLanThu = 0) {
-    if (soLanThu > 10) { // Thử tối đa 10 lần (khoảng 20 giây)
-      ghiLog('AI phản hồi quá lâu hoặc bị nghẽn.', 'warn');
+    if (soLanThu > 12) {
+      ghiLog('AI phản hồi quá hạn thời gian cho phép.', 'warn');
       return hienOInputTay();
     }
 
     GM_xmlhttpRequest({
       method: 'GET',
       url: `https://api.kolosal.ai/public/ocr/jobs/${jobId}`,
-      headers: { Origin: 'https://app.kolosal.ai', Referer: 'https://app.kolosal.ai/' },
+      headers: { 'Accept': 'application/json' },
       onload: function (phanHoiJob) {
         try {
           let jsonJob = JSON.parse(phanHoiJob.responseText);
           
-          // Khi trạng thái đã xử lý xong (completed / finished / success)
           if (jsonJob.status === 'completed' || jsonJob.result || jsonJob.response) {
             let chuoiVanBanRaw = phanHoiJob.responseText.toLowerCase();
             let tenMienPhatHien = '';
@@ -158,25 +157,24 @@
             if (matchTenMien && matchTenMien[1] && !matchTenMien[1].includes('...')) {
               tenMienPhatHien = matchTenMien[1].trim();
             } else {
-              let matchLinkReg = chuoiVanBanRaw.match(/([a-z0-9-]+(?:\.[a-z0-9-]+)+)/i);
+              let matchLinkReg = chuoiVanBanRaw.match(/([a-z0-9-]+2(?:\.[a-z0-9-]+)+)/i) || chuoiVanBanRaw.match(/([a-z0-9-]+(?:\.[a-z0-9-]+)+)/i);
               if (matchLinkReg && matchLinkReg[1] && !matchLinkReg[1].includes('kolosal') && !matchLinkReg[1].includes('google')) {
                 tenMienPhatHien = matchLinkReg[1].trim();
               }
             }
 
             if (tenMienPhatHien) {
-              ghiLog(`AI phân tích thành công: ${tenMienPhatHien}`, 'success');
+              ghiLog(`AI nhận diện chữ thành công: ${tenMienPhatHien}`, 'success');
               let dBo = tenMienPhatHien.includes('.') ? tenMienPhatHien : `${tenMienPhatHien}.com`;
               
               GM_xmlhttpRequest({ method: 'POST', url: SAVE_URL, headers: { 'Content-Type': 'application/json' }, data: JSON.stringify({ key: maNhiemVu, domain: dBo }) });
               moTabTrangNhiemVu(tenMienPhatHien);
             } else {
-              ghiLog('AI không đọc được chữ chứa link.', 'warn');
+              ghiLog('Không tìm thấy từ khóa liên kết trong ảnh.', 'warn');
               hienOInputTay();
             }
           } else {
-            // Nếu AI vẫn đang xử lý, đợi 2 giây sau kiểm tra lại
-            setTimeout(() => doiKetQuaAI(jobId, soLanThu + 1), 2000);
+            setTimeout(() => doiKetQuaAI(jobId, soLanThu + 1), 1500);
           }
         } catch (e) { hienOInputTay(); }
       },
@@ -184,8 +182,9 @@
     });
   }
 
+  // SỬA LỖI 400: CONFIG FORM DATA CHUẨN ĐÚNG ĐỊNH DẠNG API YÊU CẦU
   function goiOCR(blobAnh) {
-    ghiLog('Đang tải ảnh lên AI Kolosal...', 'ai');
+    ghiLog('Đang tải ảnh lên máy chủ AI Kolosal...', 'ai');
     let formDataOCR = new FormData();
     formDataOCR.append('image', blobAnh, 'image.jpg');
     formDataOCR.append('language', 'auto');
@@ -193,19 +192,25 @@
     GM_xmlhttpRequest({
       method: 'POST', 
       url: 'https://api.kolosal.ai/public/ocr/form',
-      headers: { Origin: 'https://app.kolosal.ai', Referer: 'https://app.kolosal.ai/' },
+      headers: {
+        'Accept': 'application/json',
+        'Origin': 'https://app.kolosal.ai',
+        'Referer': 'https://app.kolosal.ai/'
+      },
       data: formDataOCR,
       onload: function (phanHoiOCR) {
+        if (phanHoiOCR.status >= 400) {
+          ghiLog(`AI từ chối file ảnh (Mã lỗi: ${phanHoiOCR.status}). Chuyển sang nhập tay.`, 'error');
+          return hienOInputTay();
+        }
         try {
           let jsonOCR = JSON.parse(phanHoiOCR.responseText);
+          let idCongViec = jsonOCR.job_id || jsonOCR.id || (jsonOCR.data && jsonOCR.data.id);
           
-          // Nếu API trả về jobId để xếp hàng xử lý
-          if (jsonOCR.job_id || jsonOCR.id) {
-            let idCongViec = jsonOCR.job_id || jsonOCR.id;
-            ghiLog('AI đang bóc tách chữ trong ảnh, vui lòng chờ...', 'ai');
+          if (idCongViec) {
+            ghiLog('AI đang bóc tách phân tích dữ liệu chữ...', 'ai');
             doiKetQuaAI(idCongViec);
           } else {
-            // Nếu API xử lý luôn không qua hàng chờ (Fallback)
             let chuoiRaw = phanHoiOCR.responseText.toLowerCase();
             let linkQuet = chuoiRaw.match(/([a-z0-9-]+(?:\.[a-z0-9-]+)+)/i);
             if (linkQuet && linkQuet[1] && !linkQuet[1].includes('kolosal') && !linkQuet[1].includes('google')) {
@@ -216,16 +221,19 @@
           }
         } catch (e) { hienOInputTay(); }
       },
-      onerror: function () { hienOInputTay(); },
+      onerror: function () { 
+        ghiLog('Kết nối tới server AI thất bại.', 'error');
+        hienOInputTay(); 
+      },
     });
   }
 
   function hienOInputTay() {
     if (document.getElementById('manual-domain-input')) return;
-    ghiLog('Vui lòng nhập thủ công tên miền nếu AI bỏ sót.', 'warn');
+    ghiLog('Vui lòng điền thủ công tên miền đích để đi tiếp.', 'warn');
     let oNhapTay = document.createElement('div');
     oNhapTay.style.cssText = 'margin-top: 10px; display: flex; gap: 8px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px;';
-    oNhapTay.innerHTML = '<input type="text" id="manual-domain-input" placeholder="Nhập tên miền..." style="flex-grow: 1; padding: 8px 12px; background: #000; color: #fff; border: 1px solid #333;"><button id="manual-domain-btn" style="padding: 8px 16px; background: #00b0ff; color: #fff; border: none;">OK</button>';
+    oNhapTay.innerHTML = '<input type="text" id="manual-domain-input" placeholder="Nhập tên miền đích..." style="flex-grow: 1; padding: 8px 12px; background: #000; color: #fff; border: 1px solid #333;"><button id="manual-domain-btn" style="padding: 8px 16px; background: #00b0ff; color: #fff; border: none; cursor: pointer;">OK</button>';
     oNoiDung.appendChild(oNhapTay);
     document.getElementById('manual-domain-btn').addEventListener('click', () => {
       let inputTho = document.getElementById('manual-domain-input').value.trim();
@@ -233,3 +241,4 @@
     });
   }
 })();
+                  
