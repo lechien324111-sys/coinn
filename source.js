@@ -1,19 +1,3 @@
-// ==UserScript==
-// @name         NekoVCheat Bypass Premium
-// @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  Bypass shortlink automation system
-// @author       Asustv123
-// @match        *://linkhuongdan.online/*
-// @match        *://totreview.com/*
-// @match        *://uptolink.one/*
-// @grant        GM_xmlhttpRequest
-// @connect      vanhvcheat.rf.gd
-// @connect      uptolink.one
-// @connect      api.kolosal.ai
-// @run-at       document-end
-// ==UserScript==
-
 (function () {
   'use strict';
 
