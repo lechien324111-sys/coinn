@@ -41,10 +41,12 @@
     },
   };
 
-  // HÀM CHUYỂN HƯỚNG SANG TRANG LÀM NHIỆM VỤ ĐÍCH
+  // HÀM CHUYỂN HƯỚNG SANG TRANG LÀM NHIỆM VỤ ĐÍCH (KHÔNG QUA GOOGLE)
   function moTabTrangNhiemVu(chuoiTenMien) {
     let sachChuoi = chuoiTenMien.replace(/https?:\/\//i, '').replace(/\/$/, '').trim();
-    // Nếu AI quét thiếu đuôi dấu chấm, ép tự động thêm .com vào sau tên thương hiệu
+    if (!sachChuoi) return;
+    
+    // Nếu AI trích xuất thiếu đuôi (ví dụ ra top10haiphong), tự động bù đuôi .com vào sau
     let tenMienChuan = sachChuoi.includes('.') ? sachChuoi : `${sachChuoi}.com`;
     
     ghiLog(`Đang mở trang đích làm nhiệm vụ: https://${tenMienChuan}`, 'success');
@@ -155,7 +157,7 @@
   }
 
   function goiOCR(blobAnh) {
-    ghiLog('AI đang bóc tách phân tích dữ liệu ảnh...', 'ai');
+    ghiLog('AI đang tiến hành phân tích dữ liệu ảnh...', 'ai');
     let formDataOCR = new FormData();
     formDataOCR.append('image', blobAnh, 'image.jpg');
     formDataOCR.append('language', 'auto');
@@ -166,23 +168,32 @@
       data: formDataOCR,
       onload: function (phanHoiOCR) {
         try {
-          let jsonOCR = JSON.parse(phanHoiOCR.responseText);
-          
-          // SỬA LỖI ĐỌC ĐÚNG ĐỊNH DẠNG LỒNG NHAU CỦA AI KOLOSAL KHÔNG BỊ UNDEFINED
-          let ketQuaOcr = jsonOCR.response?.google_search_extraction || jsonOCR;
-          let tenMienPhatHien = (ketQuaOcr.target_domain || jsonOCR.target_domain || '').trim().toLowerCase();
-          
-          if (tenMienPhatHien && !tenMienPhatHien.includes('...')) {
+          let chuoiVanBanRaw = phanHoiOCR.responseText.toLowerCase();
+          let tenMienPhatHien = '';
+
+          // BỘ TRÍCH XUẤT THÔNG MINH: Quét trực tiếp toàn bộ chuỗi text trả về để tìm kiếm mẫu tên miền
+          let matchTenMien = chuoiVanBanRaw.match(/["']?target_domain["']?\s*:\s*["']([^"']+)["']/i);
+          if (matchTenMien && matchTenMien[1] && !matchTenMien[1].includes('...')) {
+            tenMienPhatHien = matchTenMien[1].trim();
+          } else {
+            // Dự phòng nếu API Kolosal trả về chuỗi text thô tự do
+            let matchLinkReg = chuoiVanBanRaw.match(/([a-z0-9-]+(?:\.[a-z0-9-]+)+)/i);
+            if (matchLinkReg && matchLinkReg[1] && !matchLinkReg[1].includes('kolosal') && !matchLinkReg[1].includes('google')) {
+              tenMienPhatHien = matchLinkReg[1].trim();
+            }
+          }
+
+          if (tenMienPhatHien) {
             ghiLog(`AI bóc tách thành công từ khóa: ${tenMienPhatHien}`, 'success');
-            
-            // Đồng bộ máy chủ lưu trữ dữ liệu
             let dBo = tenMienPhatHien.includes('.') ? tenMienPhatHien : `${tenMienPhatHien}.com`;
+            
+            // Đồng bộ kết quả lên máy chủ lưu trữ của bạn
             GM_xmlhttpRequest({ method: 'POST', url: SAVE_URL, headers: { 'Content-Type': 'application/json' }, data: JSON.stringify({ key: maNhiemVu, domain: dBo }) });
             
-            // Gọi hàm mở thẳng trang nhiệm vụ
+            // Thực hiện chuyển hướng ngay sang trang nhiệm vụ đích
             moTabTrangNhiemVu(tenMienPhatHien);
           } else {
-            ghiLog('AI không tìm thấy tên miền hợp lệ.', 'warn');
+            ghiLog('AI không thể nhận diện được tên miền phù hợp.', 'warn');
             hienOInputTay();
           }
         } catch (e) { hienOInputTay(); }
@@ -193,10 +204,10 @@
 
   function hienOInputTay() {
     if (document.getElementById('manual-domain-input')) return;
-    ghiLog('Hãy nhập thủ công tên miền nếu cần.', 'warn');
+    ghiLog('Vui lòng nhập thủ công tên miền nếu AI không nhận dạng được.', 'warn');
     let oNhapTay = document.createElement('div');
     oNhapTay.style.cssText = 'margin-top: 10px; display: flex; gap: 8px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px;';
-    oNhapTay.innerHTML = '<input type="text" id="manual-domain-input" placeholder="Nhập tên miền..." style="flex-grow: 1; padding: 8px 12px; background: #000; color: #fff; border: 1px solid #333;"><button id="manual-domain-btn" style="padding: 8px 16px; background: #00b0ff; color: #fff; border: none;">OK</button>';
+    oNhapTay.innerHTML = '<input type="text" id="manual-domain-input" placeholder="Nhập tên miền đích..." style="flex-grow: 1; padding: 8px 12px; background: #000; color: #fff; border: 1px solid #333;"><button id="manual-domain-btn" style="padding: 8px 16px; background: #00b0ff; color: #fff; border: none;">OK</button>';
     oNoiDung.appendChild(oNhapTay);
     document.getElementById('manual-domain-btn').addEventListener('click', () => {
       let inputTho = document.getElementById('manual-domain-input').value.trim();
